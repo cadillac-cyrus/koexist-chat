@@ -1037,3 +1037,29 @@ button:active {
 .chat-list-tab:not(.active) {
   @apply text-white/70 hover:text-white hover:bg-white/5;
 }
+
+/* Mobile Input Fixes */
+@media screen and (max-width: 768px) {
+  input, textarea {
+    font-size: 16px !important; /* Prevents zoom on focus in iOS */
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    border-radius: 0;
+  }
+  
+  /* Fix for Android keyboard issues */
+  .app-container {
+    min-height: 100vh;
+    height: -webkit-fill-available;
+  }
+  
+  html {
+    height: -webkit-fill-available;
+  }
+  
+  body {
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+  }
+}
