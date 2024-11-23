@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 
 const UPLOAD_PATH = '/uploads/profile_photos/';
-const SERVER_URL = 'http://localhost:3001'; // Updated to match the combined server port
+const SERVER_URL = 'https://koexist-server.onrender.com'; // Updated to match the combined server port
 
 export const compressImage = async (file, maxWidth = 800, maxHeight = 800) => {
   return new Promise((resolve) => {
