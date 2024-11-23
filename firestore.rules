@@ -1,0 +1,80 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isParticipant(chatData) {
+      return isAuthenticated() && 
+             request.auth.uid in chatData.participants;
+    }
+
+    function isValidChatData() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['participants', 'createdAt', 'lastMessageTime', 'isGroup']) &&
+             data.participants is list &&
+             data.participants.size() >= 2 &&
+             data.createdAt is timestamp &&
+             data.lastMessageTime is timestamp &&
+             data.isGroup is bool;
+    }
+
+    function isValidMessage() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['text', 'senderId', 'timestamp']) &&
+             data.text is string &&
+             data.text.size() > 0 &&
+             data.text.size() <= 2000 &&
+             data.senderId == request.auth.uid &&
+             data.timestamp is timestamp;
+    }
+
+    // Chats collection rules
+    match /chats/{chatId} {
+      // Create: User must be authenticated and data must be valid
+      allow create: if isAuthenticated() && 
+                      isValidChatData() && 
+                      request.auth.uid in request.resource.data.participants;
+      
+      // Read: User must be a participant
+      allow read: if isAuthenticated() && 
+                    exists(/databases/$(database)/documents/chats/$(chatId)) &&
+                    request.auth.uid in resource.data.participants;
+      
+      // Update: User must be participant and can only update specific fields
+      allow update: if isAuthenticated() &&
+                      request.auth.uid in resource.data.participants &&
+                      request.resource.data.participants == resource.data.participants &&
+                      request.resource.data.createdAt == resource.data.createdAt;
+      
+      // Messages subcollection rules
+      match /messages/{messageId} {
+        allow create: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/chats/$(chatId)) &&
+                        request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants &&
+                        isValidMessage();
+        
+        allow read: if isAuthenticated() && 
+                      exists(/databases/$(database)/documents/chats/$(chatId)) &&
+                      request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        
+        allow update, delete: if false; // Messages cannot be edited or deleted
+      }
+    }
+
+    // Users collection rules
+    match /users/{userId} {
+      // Read: Any authenticated user can read basic user data
+      allow read: if isAuthenticated();
+      
+      // Write: Users can only modify their own data
+      allow write: if isAuthenticated() && 
+                     request.auth.uid == userId &&
+                     (!request.resource.data.diff(resource.data).affectedKeys()
+                        .hasAny(['createdAt', 'email'])); // Prevent modification of critical fields
+    }
+  }
+}

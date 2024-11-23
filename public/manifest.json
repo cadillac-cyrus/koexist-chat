@@ -1,0 +1,40 @@
+{
+  "short_name": "Koexist",
+  "name": "Koexist Chat App",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "logo192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "logo512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#1F2937",
+  "background_color": "#111827",
+  "orientation": "portrait",
+  "categories": ["social", "communication"],
+  "description": "A modern chat application for seamless communication",
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Open Messages",
+      "short_name": "Messages",
+      "description": "View your messages",
+      "url": "/chat",
+      "icons": [{ "src": "logo192.png", "sizes": "192x192" }]
+    }
+  ]
+}
