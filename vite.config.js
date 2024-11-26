@@ -38,7 +38,14 @@ export default defineConfig({
         ],
         related_applications: [],
         prefer_related_applications: false,
-        gcm_sender_id: "h3F_nRC3EdA_OYCBfKFPW1FI83xlQpzGZ2Lxlmzoow4"
+        gcm_sender_id: "428936093091"
+      },
+      strategies: 'injectManifest',
+      srcDir: 'public',
+      filename: 'sw.js',
+      injectRegister: 'auto',
+      injectManifest: {
+        injectionPoint: null
       },
       workbox: {
         sourcemap: true,
@@ -59,8 +66,6 @@ export default defineConfig({
         ]
       },
       includeAssets: ['chat-icon.png'],
-      strategies: 'injectManifest',
-      injectRegister: 'auto',
       devOptions: {
         enabled: true,
         type: 'module'

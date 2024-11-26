@@ -1,6 +1,7 @@
 importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js');
 
+// Initialize Firebase
 firebase.initializeApp({
   apiKey: "AIzaSyAanwQgR1_WaNwIqEZXBloZZ2Xatww5wnI",
   authDomain: "chatt-45649.firebaseapp.com",
@@ -12,6 +13,21 @@ firebase.initializeApp({
 });
 
 const messaging = firebase.messaging();
+
+// This will be replaced by the precache manifest
+self.__WB_MANIFEST;
+
+// Cache the Google Firebase scripts
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open('firebase-scripts-v1').then((cache) => {
+      return cache.addAll([
+        'https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js',
+        'https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js'
+      ]);
+    })
+  );
+});
 
 // Handle background messages
 messaging.onBackgroundMessage((payload) => {
@@ -31,6 +47,7 @@ messaging.onBackgroundMessage((payload) => {
   self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
+// Handle notification clicks
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const urlToOpen = new URL('/', self.location.origin).href;
@@ -51,5 +68,25 @@ self.addEventListener('notificationclick', (event) => {
         return clients.openWindow(urlToOpen);
       }
     })
+  );
+});
+
+// Handle service worker activation
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    Promise.all([
+      // Clean up old caches
+      caches.keys().then((cacheNames) => {
+        return Promise.all(
+          cacheNames.map((cacheName) => {
+            if (cacheName !== 'firebase-scripts-v1') {
+              return caches.delete(cacheName);
+            }
+          })
+        );
+      }),
+      // Tell clients to reload and get the new version
+      clients.claim()
+    ])
   );
 });
