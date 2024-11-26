@@ -153,9 +153,57 @@ export function SocketProvider({ children }) {
       }
     });
 
+    // Listen for group updates
+    socket.on('group:update', async ({ chatId, action, userId, data }) => {
+      const chatRef = doc(db, 'chats', chatId);
+      const chatDoc = await getDoc(chatRef);
+      
+      if (!chatDoc.exists()) return;
+      
+      const chatData = chatDoc.data();
+      
+      switch (action) {
+        case 'add_members':
+          await updateDoc(chatRef, {
+            participants: arrayUnion(...data.members),
+            participantDetails: {
+              ...chatData.participantDetails,
+              ...data.memberDetails
+            }
+          });
+          break;
+          
+        case 'remove_member':
+          const { [data.memberId]: removedMember, ...updatedParticipantDetails } = chatData.participantDetails;
+          await updateDoc(chatRef, {
+            participants: arrayRemove(data.memberId),
+            participantDetails: updatedParticipantDetails
+          });
+          break;
+          
+        case 'change_name':
+          await updateDoc(chatRef, {
+            groupName: data.newName
+          });
+          break;
+          
+        case 'leave_group':
+          const { [userId]: leavingMember, ...remainingParticipants } = chatData.participantDetails;
+          await updateDoc(chatRef, {
+            participants: arrayRemove(userId),
+            participantDetails: remainingParticipants,
+            ...(chatData.groupSettings.admins.includes(userId) && {
+              'groupSettings.admins': arrayRemove(userId)
+            })
+          });
+          break;
+      }
+    });
+
     return () => {
       socket.off('new_message');
       socket.off('chat_action');
+      socket.off('group:update');
     };
   }, [user, currentChatId, socket]);
 
@@ -184,6 +232,11 @@ export function SocketProvider({ children }) {
     socket.emit('typing:stop', { chatId, user });
   }, [socket, connected, user]);
 
+  const handleGroupAction = useCallback((chatId, action, data = {}) => {
+    if (!socket || !connected || !user) return;
+    socket.emit('group:action', { chatId, action, userId: user.uid, ...data });
+  }, [socket, connected, user]);
+
   const value = {
     socket,
     activeUsers,
@@ -193,7 +246,8 @@ export function SocketProvider({ children }) {
     joinChat,
     startTyping,
     stopTyping,
-    setCurrentChatId
+    setCurrentChatId,
+    handleGroupAction
   };
 
   return (

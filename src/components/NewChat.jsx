@@ -68,11 +68,23 @@ export default function NewChat({ onClose }) {
     setSelectedUsers(selectedUsers.filter(u => u.id !== userToRemove.id));
   };
 
+  const handleCreateGroup = () => {
+    if (!groupName.trim()) {
+      setError('Please enter a group name');
+      return;
+    }
+    if (selectedUsers.length < 1) {
+      setError('Please select at least one participant');
+      return;
+    }
+    createChat(selectedUsers, groupName.trim());
+  };
+
   const createChat = async (selectedUsers, groupName = '') => {
     if (!selectedUsers.length) return;
 
     try {
-      const isGroup = selectedUsers.length > 1;
+      const isGroup = selectedUsers.length > 0 && groupName;
       const participants = [user.uid, ...selectedUsers.map(u => u.id)];
 
       // Check if a chat already exists with these participants
@@ -90,26 +102,16 @@ export default function NewChat({ onClose }) {
         const chatParticipants = chatData.participants || [];
         const deletedBy = chatData.deletedBy || [];
         
-        // For private chats, check if it's the same two users
         if (!isGroup && chatParticipants.length === 2 &&
             chatParticipants.includes(selectedUsers[0].id)) {
           existingChat = { id: doc.id, ...chatData };
         }
-        // For group chats, check if it's the exact same participants and name
-        else if (isGroup && 
-                chatData.isGroup && 
-                chatData.groupName === groupName &&
-                chatParticipants.length === participants.length &&
-                participants.every(p => chatParticipants.includes(p))) {
-          existingChat = { id: doc.id, ...chatData };
-        }
       });
 
-      if (existingChat) {
+      if (existingChat && !isGroup) {
         const chatRef = doc(db, 'chats', existingChat.id);
         const deletedBy = existingChat.deletedBy || [];
         
-        // If chat exists and was deleted by the current user, restore it
         if (deletedBy.includes(user.uid)) {
           await updateDoc(chatRef, {
             deletedBy: arrayRemove(user.uid),
@@ -123,18 +125,49 @@ export default function NewChat({ onClose }) {
         return;
       }
 
-      // Create new chat if none exists
-      const newChatRef = await addDoc(chatsRef, {
-        participants,
-        createdAt: serverTimestamp(),
-        lastMessageTime: serverTimestamp(),
-        isGroup: isGroup,
-        groupName: isGroup ? groupName : '',
-        unreadMessages: {},
-        archivedBy: [],
-        deletedBy: []
+      // Create new chat
+      const participantDetails = {};
+      participantDetails[user.uid] = {
+        uid: user.uid,
+        displayName: user.displayName || user.email?.split('@')[0],
+        email: user.email,
+        photoURL: user.photoURL
+      };
+
+      selectedUsers.forEach(selectedUser => {
+        participantDetails[selectedUser.id] = {
+          uid: selectedUser.id,
+          displayName: selectedUser.displayName || selectedUser.email?.split('@')[0],
+          email: selectedUser.email,
+          photoURL: selectedUser.photoURL
+        };
       });
 
+      const chatData = {
+        participants,
+        participantDetails,
+        createdAt: serverTimestamp(),
+        lastMessageTime: serverTimestamp(),
+        isGroup,
+        type: isGroup ? 'group' : 'private',
+        unreadMessages: {},
+        archivedBy: [],
+        deletedBy: [],
+        chat_message_prompts: isGroup ? ['Welcome to the group!'] : [],
+      };
+
+      if (isGroup) {
+        chatData.groupName = groupName;
+        chatData.groupSettings = {
+          admins: [user.uid],
+          canAddMembers: true,
+          canRemoveMembers: true,
+          canChangeGroupName: true,
+          canLeaveGroup: true
+        };
+      }
+
+      const newChatRef = await addDoc(chatsRef, chatData);
       onClose();
       navigate(`/chat/${newChatRef.id}`);
     } catch (error) {
@@ -185,7 +218,7 @@ export default function NewChat({ onClose }) {
                 className="input-field w-full bg-white/5 border border-white/10 rounded-xl p-3 focus:ring-2 focus:ring-accent-blue transition-all duration-300"
               />
               <p className="text-xs text-white/50 px-1">
-                Select at least 2 participants to create a group
+                Select at least 1 participant to create a group
               </p>
             </div>
           )}
@@ -266,23 +299,18 @@ export default function NewChat({ onClose }) {
           </div>
 
           {/* Create Group Button */}
-          {isGroup && selectedUsers.length > 0 && (
-            <div className="mt-4">
-              <button
-                onClick={() => createChat(selectedUsers, groupName)}
-                disabled={!groupName.trim() || selectedUsers.length < 2}
-                className={`w-full p-3 rounded-xl transition-all duration-300 ${
-                  !groupName.trim() || selectedUsers.length < 2
-                    ? 'bg-white/10 text-white/50 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-accent-blue to-purple-500 text-white hover:opacity-90'
-                }`}
-              >
-                {selectedUsers.length < 2 
-                  ? `Select ${2 - selectedUsers.length} more participant${selectedUsers.length === 1 ? '' : 's'}`
-                  : 'Create Group Chat'
-                }
-              </button>
-            </div>
+          {isGroup && (
+            <button
+              onClick={handleCreateGroup}
+              disabled={!groupName.trim() || selectedUsers.length < 1}
+              className={`w-full p-3 rounded-xl text-white font-medium transition-all duration-300 ${
+                !groupName.trim() || selectedUsers.length < 1
+                  ? 'bg-white/10 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-accent-blue to-purple-500 hover:from-accent-blue/90 hover:to-purple-500/90'
+              }`}
+            >
+              Create Group
+            </button>
           )}
         </div>
       </div>

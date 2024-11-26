@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'rea
 import { AuthProvider } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { PusherProvider } from './context/PusherContext';
 import Login from './components/Login';
 import SignUp from './components/SignUp';
 import ChatList from './components/ChatList';
@@ -45,74 +46,76 @@ function App() {
       <AuthProvider>
         <ThemeProvider>
           <SocketProvider>
-            <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
-              <Routes>
-                <Route path="/login" element={<Login />} />
-                <Route path="/signup" element={<SignUp />} />
-                <Route
-                  path="/"
-                  element={
-                    <PrivateRoute>
-                      <AppLayout>
-                        <ChatList />
-                      </AppLayout>
-                    </PrivateRoute>
-                  }
-                />
-                <Route
-                  path="/chats"
-                  element={
-                    <PrivateRoute>
-                      <AppLayout>
-                        <ChatList />
-                      </AppLayout>
-                    </PrivateRoute>
-                  }
-                />
-                <Route
-                  path="/chat/:chatId"
-                  element={
-                    <PrivateRoute>
-                      <AppLayout>
-                        <ChatDetail />
-                      </AppLayout>
-                    </PrivateRoute>
-                  }
-                />
-                <Route
-                  path="/profile"
-                  element={
-                    <PrivateRoute>
-                      <AppLayout>
-                        <Profile />
-                      </AppLayout>
-                    </PrivateRoute>
-                  }
-                />
-                <Route
-                  path="/profile/:userId"
-                  element={
-                    <PrivateRoute>
-                      <AppLayout>
-                        <Profile userId={useParams().userId} />
-                      </AppLayout>
-                    </PrivateRoute>
-                  }
-                />
-                <Route
-                  path="/groups"
-                  element={
-                    <PrivateRoute>
-                      <AppLayout>
-                        <GroupList />
-                      </AppLayout>
-                    </PrivateRoute>
-                  }
-                />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="*" element={<Navigate to="/" />} />
-              </Routes>
-            </div>
+            <PusherProvider>
+              <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
+                <Routes>
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/signup" element={<SignUp />} />
+                  <Route
+                    path="/"
+                    element={
+                      <PrivateRoute>
+                        <AppLayout>
+                          <ChatList />
+                        </AppLayout>
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
+                    path="/chats"
+                    element={
+                      <PrivateRoute>
+                        <AppLayout>
+                          <ChatList />
+                        </AppLayout>
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
+                    path="/chat/:chatId"
+                    element={
+                      <PrivateRoute>
+                        <AppLayout>
+                          <ChatDetail />
+                        </AppLayout>
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
+                    path="/profile"
+                    element={
+                      <PrivateRoute>
+                        <AppLayout>
+                          <Profile />
+                        </AppLayout>
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
+                    path="/profile/:userId"
+                    element={
+                      <PrivateRoute>
+                        <AppLayout>
+                          <Profile userId={useParams().userId} />
+                        </AppLayout>
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
+                    path="/groups"
+                    element={
+                      <PrivateRoute>
+                        <AppLayout>
+                          <GroupList />
+                        </AppLayout>
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route path="/settings" element={<Settings />} />
+                  <Route path="*" element={<Navigate to="/" />} />
+                </Routes>
+              </div>
+            </PusherProvider>
           </SocketProvider>
         </ThemeProvider>
       </AuthProvider>

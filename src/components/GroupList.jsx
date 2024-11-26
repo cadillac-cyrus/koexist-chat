@@ -113,7 +113,7 @@ export default function GroupList() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <h2 className="text-white font-medium truncate">
-                      {group.name}
+                      {group.groupName || 'Unnamed Group'}
                     </h2>
                     <p className="text-sm text-white/50 truncate">
                       {group.lastMessage?.text || 'No messages yet'}

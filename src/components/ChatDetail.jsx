@@ -11,7 +11,9 @@ import {
   serverTimestamp, 
   getDoc, 
   writeBatch, 
-  updateDoc
+  updateDoc,
+  arrayUnion,
+  arrayRemove
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { 
@@ -22,7 +24,11 @@ import {
   ArrowUturnLeftIcon,
   XMarkIcon,
   UserGroupIcon,
-  InformationCircleIcon
+  InformationCircleIcon,
+  EllipsisVerticalIcon,
+  UserPlusIcon,
+  PencilIcon,
+  ArrowLeftOnRectangleIcon
 } from '@heroicons/react/24/solid';
 import { useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
@@ -39,6 +45,7 @@ import MessageBubble from './MessageBubble';
 import { formatDistanceToNow } from 'date-fns';
 import { UserCircleIcon } from '@heroicons/react/24/solid';
 import ProfilePopup from './ProfilePopup';
+import { requestNotificationPermission, showNotification } from '../utils/notifications';
 
 export default function ChatDetail() {
   const { chatId } = useParams();
@@ -54,6 +61,10 @@ export default function ChatDetail() {
   const [otherUser, setOtherUser] = useState(null);
   const [showProfilePopup, setShowProfilePopup] = useState(false);
   const [showGroupInfo, setShowGroupInfo] = useState(false);
+  const [showGroupActions, setShowGroupActions] = useState(false);
+  const [groupActionType, setGroupActionType] = useState(null);
+  const [selectedMembers, setSelectedMembers] = useState([]);
+  const [newGroupName, setNewGroupName] = useState('');
   const messagesEndRef = useRef(null);
   const navigate = useNavigate();
   const typingTimeoutRef = useRef(null);
@@ -69,6 +80,8 @@ export default function ChatDetail() {
 
   useEffect(() => {
     if (!chatId || !user) return;
+
+    requestNotificationPermission();
 
     const chatRef = doc(db, 'chats', chatId);
     const unsubChat = onSnapshot(chatRef, (doc) => {
@@ -153,11 +166,22 @@ export default function ChatDetail() {
       );
 
       unsubMessages = onSnapshot(messagesQuery, (snapshot) => {
-        const messageList = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        setMessages(messageList);
+        const newMessages = [];
+        snapshot.forEach((doc) => {
+          newMessages.push({ id: doc.id, ...doc.data() });
+        });
+        setMessages(newMessages);
+
+        // Show notification for the latest message if it's not from the current user
+        const latestMessage = newMessages[newMessages.length - 1];
+        if (latestMessage && latestMessage.senderId !== user.uid) {
+          const senderName = latestMessage.senderName || 'Someone';
+          showNotification(`New message from ${senderName}`, {
+            body: latestMessage.text || 'New message received',
+            tag: chatId, // Prevent multiple notifications from the same chat
+          });
+        }
+
         if (user?.uid) {
           markMessagesAsRead(chatId, user.uid).catch(console.error);
         }
@@ -211,12 +235,16 @@ export default function ChatDetail() {
           displayName: user.displayName
         },
         timestamp: serverTimestamp(),
+        chatId: chatId // Add chatId to the message data
       };
 
       // Only add replyTo if it exists
       if (replyTo?.id) {
         messageData.replyTo = replyTo.id;
       }
+
+      // Emit the message event for Pusher notification
+      socket.emit('new-message', messageData);
 
       const chatRef = doc(db, 'chats', chatId);
       const batch = writeBatch(db);
@@ -270,6 +298,104 @@ export default function ChatDetail() {
     }
   };
 
+  const handleGroupAction = async (actionType) => {
+    setGroupActionType(actionType);
+    setShowGroupActions(true);
+  };
+
+  const handleAddMembers = async () => {
+    if (!selectedMembers.length) return;
+    
+    try {
+      const chatRef = doc(db, 'chats', chatId);
+      const chatDoc = await getDoc(chatRef);
+      
+      if (!chatDoc.exists()) return;
+      
+      const chatData = chatDoc.data();
+      const newParticipants = selectedMembers.map(member => member.uid);
+      
+      await updateDoc(chatRef, {
+        participants: arrayUnion(...newParticipants),
+        participantDetails: {
+          ...chatData.participantDetails,
+          ...Object.fromEntries(
+            selectedMembers.map(member => [
+              member.uid,
+              {
+                uid: member.uid,
+                displayName: member.displayName,
+                email: member.email,
+                photoURL: member.photoURL
+              }
+            ])
+          )
+        }
+      });
+      
+      setShowGroupActions(false);
+      setSelectedMembers([]);
+    } catch (error) {
+      console.error('Error adding members:', error);
+    }
+  };
+
+  const handleRemoveMember = async (memberId) => {
+    try {
+      const chatRef = doc(db, 'chats', chatId);
+      const chatDoc = await getDoc(chatRef);
+      
+      if (!chatDoc.exists()) return;
+      
+      const chatData = chatDoc.data();
+      const { [memberId]: removedMember, ...updatedParticipantDetails } = chatData.participantDetails;
+      
+      await updateDoc(chatRef, {
+        participants: arrayRemove(memberId),
+        participantDetails: updatedParticipantDetails
+      });
+    } catch (error) {
+      console.error('Error removing member:', error);
+    }
+  };
+
+  const handleChangeGroupName = async () => {
+    if (!newGroupName.trim()) return;
+    
+    try {
+      const chatRef = doc(db, 'chats', chatId);
+      await updateDoc(chatRef, {
+        groupName: newGroupName.trim()
+      });
+      
+      setShowGroupActions(false);
+      setNewGroupName('');
+    } catch (error) {
+      console.error('Error changing group name:', error);
+    }
+  };
+
+  const handleLeaveGroup = async () => {
+    try {
+      const chatRef = doc(db, 'chats', chatId);
+      const chatDoc = await getDoc(chatRef);
+      
+      if (!chatDoc.exists()) return;
+      
+      const chatData = chatDoc.data();
+      const { [user.uid]: removedUser, ...updatedParticipantDetails } = chatData.participantDetails;
+      
+      await updateDoc(chatRef, {
+        participants: arrayRemove(user.uid),
+        participantDetails: updatedParticipantDetails
+      });
+      
+      navigate('/');
+    } catch (error) {
+      console.error('Error leaving group:', error);
+    }
+  };
+
   if (isLoading || !user) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -281,68 +407,88 @@ export default function ChatDetail() {
   return (
     <div className="flex flex-col h-full bg-dark-primary">
       {/* Chat Header */}
-      <div className="p-4 border-b border-gray-700 flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <button 
-            onClick={() => !otherUser?.isGroup && setShowProfilePopup(true)} 
-            className="flex items-center space-x-3 hover:opacity-80"
+      <div className="chat-header">
+        <div className="chat-header-content">
+          <button
+            onClick={() => navigate('/chats')}
+            className="chat-header-button"
+            aria-label="Back to chats"
           >
-            {otherUser?.isGroup ? (
-              <div className="relative">
-                <div className="h-10 w-10 rounded-full bg-gradient-to-r from-purple-500 to-accent-blue flex items-center justify-center">
-                  <UserGroupIcon className="h-6 w-6 text-white" />
-                </div>
-                <div className="absolute -bottom-1 -right-1 bg-accent-blue rounded-full px-2 py-0.5">
-                  <span className="text-xs text-white font-medium">
-                    {otherUser.participants?.length || 0}
-                  </span>
-                </div>
-              </div>
-            ) : otherUser?.photoURL ? (
-              <img
-                src={getFullImageUrl(otherUser.photoURL)}
-                alt={otherUser.displayName}
-                className="h-10 w-10 rounded-full object-cover"
-                onError={(e) => {
-                  console.error('Image failed to load:', otherUser.photoURL);
-                  e.target.src = 'https://via.placeholder.com/150?text=No+Image';
-                }}
-              />
-            ) : (
-              <UserCircleIcon className="h-10 w-10 text-gray-400" />
-            )}
-            <div>
-              <h2 className="text-lg font-semibold text-white text-left">
-                {otherUser?.displayName || 'Loading...'}
-              </h2>
+            <ArrowLeftIcon className="h-5 w-5" />
+          </button>
+
+          <button
+            onClick={() => !otherUser?.isGroup && setShowProfilePopup(true)}
+            className="chat-header-user"
+          >
+            <div className="chat-header-avatar">
               {otherUser?.isGroup ? (
-                <p className="text-sm text-gray-400">
+                <>
+                  <div className="chat-header-group-icon">
+                    <UserGroupIcon className="h-6 w-6 text-white" />
+                  </div>
+                  <div className="chat-header-member-count">
+                    <span className="text-xs text-white font-medium">
+                      {otherUser.participants?.length || 0}
+                    </span>
+                  </div>
+                </>
+              ) : otherUser?.photoURL ? (
+                <img
+                  src={getFullImageUrl(otherUser.photoURL)}
+                  alt={otherUser.displayName}
+                  className="chat-header-avatar-image"
+                  onError={(e) => {
+                    e.target.src = 'https://via.placeholder.com/150?text=No+Image';
+                  }}
+                />
+              ) : (
+                <UserCircleIcon className="chat-header-avatar-image text-gray-400" />
+              )}
+            </div>
+            <div className="chat-header-info">
+              <div className="chat-header-name-container">
+                <h2 className="chat-header-name">
+                  {otherUser?.isGroup ? chatInfo?.groupName || 'Group Chat' : otherUser?.displayName || 'Loading...'}
+                </h2>
+                {!otherUser?.isGroup && (
+                  <span className={`online-indicator ${otherUser?.online ? 'bg-green-400' : 'bg-gray-400'}`} />
+                )}
+              </div>
+              {otherUser?.isGroup ? (
+                <p className="chat-header-status">
                   {otherUser.participants?.length || 0} members
                 </p>
               ) : (
-                <p className="text-sm text-gray-400">
+                <p className={`chat-header-status ${isTyping ? 'typing' : ''}`}>
                   {isTyping ? 'typing...' : otherUser?.online ? 'online' : 'offline'}
                 </p>
               )}
             </div>
           </button>
-        </div>
 
-        <div className="flex items-center space-x-2">
-          {otherUser?.isGroup && (
-            <button
-              onClick={() => setShowGroupInfo(true)}
-              className="p-1.5 rounded-full hover:bg-gray-700 transition-colors"
-            >
-              <InformationCircleIcon className="h-5 w-5 text-gray-300" />
-            </button>
-          )}
-          <button 
-            onClick={() => navigate('/chats')}
-            className="p-1.5 rounded-full hover:bg-gray-700 transition-colors"
-          >
-            <ArrowLeftIcon className="h-5 w-5 text-gray-300" />
-          </button>
+          <div className="chat-header-actions">
+            {otherUser?.isGroup && (
+              <>
+                <button
+                  onClick={() => setShowGroupInfo(true)}
+                  className="chat-header-button"
+                  title="Group Info"
+                >
+                  <InformationCircleIcon className="h-5 w-5" />
+                </button>
+                {chatInfo?.groupSettings?.canChangeGroupName && (
+                  <button
+                    onClick={() => setShowGroupActions(true)}
+                    className="chat-header-button"
+                    title="Group Actions"
+                  >
+                    <EllipsisVerticalIcon className="h-5 w-5" />
+                  </button>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -395,6 +541,48 @@ export default function ChatDetail() {
                   ))}
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Group Actions Modal */}
+      {showGroupActions && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowGroupActions(false)}></div>
+          <div className="relative w-full max-w-lg glass-panel rounded-2xl p-6 space-y-4">
+            <h3 className="text-lg font-semibold text-white">Group Actions</h3>
+            
+            <div className="space-y-4">
+              {chatInfo?.groupSettings?.canAddMembers && (
+                <button
+                  onClick={() => handleGroupAction('add')}
+                  className="w-full flex items-center px-4 py-3 rounded-xl hover:bg-white/10 transition-colors"
+                >
+                  <UserPlusIcon className="h-5 w-5 mr-3" />
+                  Add Members
+                </button>
+              )}
+              
+              {chatInfo?.groupSettings?.canChangeGroupName && (
+                <button
+                  onClick={() => handleGroupAction('rename')}
+                  className="w-full flex items-center px-4 py-3 rounded-xl hover:bg-white/10 transition-colors"
+                >
+                  <PencilIcon className="h-5 w-5 mr-3" />
+                  Change Group Name
+                </button>
+              )}
+              
+              {chatInfo?.groupSettings?.canLeaveGroup && (
+                <button
+                  onClick={handleLeaveGroup}
+                  className="w-full flex items-center px-4 py-3 rounded-xl text-red-400 hover:bg-white/10 transition-colors"
+                >
+                  <ArrowLeftOnRectangleIcon className="h-5 w-5 mr-3" />
+                  Leave Group
+                </button>
+              )}
             </div>
           </div>
         </div>
