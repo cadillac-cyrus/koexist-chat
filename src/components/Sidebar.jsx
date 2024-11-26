@@ -53,7 +53,7 @@ export default function Sidebar() {
   };
   const getFullImageUrl = (path) => {
     if (!path) return null;
-    return path.startsWith('http') ? path : `http://localhost:3001${path}`;
+    return path.startsWith('https') ? path : `https://koexist-server.onrender.com${path}`;
   };
   
   const displayPhotoURL = getFullImageUrl(user?.photoURL || user?.profileData?.photoURL);

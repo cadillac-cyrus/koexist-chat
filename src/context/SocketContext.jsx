@@ -25,7 +25,7 @@ export function SocketProvider({ children }) {
   const initializeSocket = useCallback(() => {
     if (!user) return null;
 
-    const newSocket = io('http://localhost:3001', {
+    const newSocket = io('https://koexist-server.onrender.com', {
       withCredentials: true,
       transports: ['websocket', 'polling'],
       reconnection: true,

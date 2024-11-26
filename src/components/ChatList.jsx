@@ -44,7 +44,7 @@ export default function ChatList() {
 
   const getFullImageUrl = (path) => {
     if (!path) return null;
-    return path.startsWith('http') ? path : `http://localhost:3001${path}`;
+    return path.startsWith('https') ? path : `https://koexist-server.onrender.com${path}`;
   };
 
   const handleMarkAsRead = async (chat) => {
